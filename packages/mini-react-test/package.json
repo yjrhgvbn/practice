@@ -1,0 +1,11 @@
+{
+  "name": "mini-react-test",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "demo": "npx parcel ./demo/index.html  --no-cache"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
