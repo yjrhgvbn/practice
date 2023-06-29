@@ -1,0 +1,26 @@
+{
+  "name": "practice",
+  "type": "module",
+  "version": "0.0.0",
+  "packageManager": "pnpm@8.6.0",
+  "description": "",
+  "author": "yjrhgvbn@gmail.com",
+  "license": "MIT",
+  "keywords": [],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^0.39.6",
+    "@types/node": "^20.3.2",
+    "@types/react": "^18.2.14",
+    "eslint": "^8.43.0",
+    "lint-staged": "^13.2.3",
+    "parcel": "^2.9.3",
+    "typescript": "^5.1.6",
+    "vite": "^4.3.9",
+    "vitest": "^0.32.2"
+  }
+}
