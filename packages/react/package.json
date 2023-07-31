@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "demo1": "npx parcel ./demo/demo1/index.html  --no-cache"
+    "demo1": "npx parcel ./demo/demo1/index.html  --no-cache",
+    "demo2": "npx parcel ./demo/demo2/index.html  --no-cache"
   },
   "keywords": [],
   "author": "",

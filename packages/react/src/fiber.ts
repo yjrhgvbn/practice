@@ -1,5 +1,5 @@
 import type { FiberNode, VirtualElement } from './type'
-import { createDOM } from './createDom'
+import { createDOM, updateAttributes } from './createDom'
 
 // 下一个要处理的fiber节点
 let nextUnitOfWork: FiberNode | null = null
@@ -7,6 +7,53 @@ let nextUnitOfWork: FiberNode | null = null
 let currentRoot: FiberNode | null = null
 // 当前渲染的 fiber 树
 let workInProgressRoot: FiberNode<any> | null = null
+// 当前渲染函数组件的filer节点
+let wipFiber: FiberNode<any> | null = null
+// hooks 索引
+let hookIndex = 0
+// 用于记录删除的节点
+let deletions: FiberNode[] = []
+
+export function useState<S>(initState: S): [S, (value: S) => void] {
+  const fiberNode: FiberNode<S> = wipFiber!
+  const hook: {
+    state: S
+    queue: S[]
+  } = fiberNode?.alternate?.hooks
+    ? fiberNode.alternate.hooks[hookIndex]
+    : {
+        state: initState,
+        queue: [],
+      }
+
+  while (hook.queue.length) {
+    const newState = hook.queue.shift()
+    hook.state = newState!
+  }
+
+  if (typeof fiberNode?.hooks === 'undefined')
+    fiberNode.hooks = []
+
+  fiberNode.hooks.push(hook)
+  hookIndex += 1
+
+  const setState = (value: S) => {
+    hook.queue.push(value)
+    if (currentRoot) {
+      workInProgressRoot = {
+        type: currentRoot.type,
+        dom: currentRoot.dom,
+        props: currentRoot.props,
+        alternate: currentRoot,
+      }
+      nextUnitOfWork = workInProgressRoot
+      deletions = []
+      currentRoot = null
+    }
+  }
+
+  return [hook.state, setState]
+}
 
 // 创建fiber根目录，render函数调用
 export function createRootFiberNode(element: VirtualElement, container: Element) {
@@ -15,7 +62,7 @@ export function createRootFiberNode(element: VirtualElement, container: Element)
     type: 'div',
     dom: container,
     props: {
-      children: [{ ...element }],
+      children: [element],
     },
     alternate: currentRoot,
   }
@@ -25,10 +72,15 @@ export function createRootFiberNode(element: VirtualElement, container: Element)
 function performUnitOfWork(fiberNode: FiberNode): FiberNode | null {
   const type = fiberNode.type
   if (typeof type === 'function') {
+    // 函数组件hook处理
+    wipFiber = fiberNode
+    wipFiber.hooks = []
+    hookIndex = 0
     const children = [type(fiberNode.props)]
+
     reconcileChildren(fiberNode, children)
   }
-  else if (typeof type === 'string' || typeof type === 'number') {
+  else if (!type || typeof type === 'string' || typeof type === 'number') {
     if (!fiberNode.dom)
       fiberNode.dom = createDOM(fiberNode)
     reconcileChildren(fiberNode, fiberNode.props.children)
@@ -51,32 +103,62 @@ function performUnitOfWork(fiberNode: FiberNode): FiberNode | null {
 }
 
 function reconcileChildren(fiberNode: FiberNode, elements?: (string | VirtualElement)[]) {
-  if (!elements)
+  if (!elements || !elements.length)
+    return
+  // 二维转一维，方便处理
+  elements = elements.flat()
+  if (!elements.length)
     return
   let index = 0
   let preFiber: FiberNode | null = null
-  while (index < elements.length) {
+  let oldFiberNode: FiberNode | null = null
+  if (fiberNode.alternate?.child)
+    oldFiberNode = fiberNode.alternate.child
+
+  while (index < elements.length || oldFiberNode) {
     const curElement = elements[index]
+    let newFiber: FiberNode | null = null
     let child: VirtualElement
     if (typeof curElement === 'string')
       child = createTextElement(curElement)
 
-    else
-      child = curElement
+    else child = curElement
 
-    const newFiber: FiberNode = {
-      type: typeof child === 'string' ? child : child.type,
-      alternate: null,
-      dom: null,
-      flag: 'Placement',
-      props: child.props,
-      return: fiberNode,
+    const isSameType = Boolean(
+      oldFiberNode
+        && child
+        && oldFiberNode.type === child.type,
+    )
+    if (oldFiberNode && isSameType) {
+      newFiber = {
+        type: oldFiberNode.type,
+        dom: oldFiberNode.dom,
+        alternate: oldFiberNode,
+        props: child.props,
+        return: fiberNode,
+        flag: 'UPDATE',
+      }
     }
+    if (child && !isSameType) {
+      newFiber = {
+        type: child.type,
+        alternate: null,
+        dom: null,
+        flag: 'Placement',
+        props: child.props,
+        return: fiberNode,
+      }
+    }
+    if (!isSameType && oldFiberNode)
+      deletions.push(oldFiberNode)
 
-    if (index === 0)
-      fiberNode.child = newFiber
-    else
-      preFiber!.sibling = newFiber
+    if (oldFiberNode)
+      oldFiberNode = oldFiberNode.sibling || null
+
+    if (!preFiber && newFiber)
+      fiberNode.child = newFiber!
+    else if (preFiber)
+      preFiber!.sibling = newFiber!
 
     preFiber = newFiber
     index += 1
@@ -106,13 +188,13 @@ function commitRoot() {
           case 'Placement':
             parentDOM?.appendChild(fiberNode.dom)
             break
-          // case 'UPDATE':
-          //   updateDOM(
-          //     fiberNode.dom,
-          //     fiberNode.alternate ? fiberNode.alternate.props : {},
-          //     fiberNode.props,
-          //   )
-          //   break
+          case 'UPDATE':
+            updateAttributes(
+              fiberNode.dom,
+              fiberNode.props,
+              fiberNode.alternate ? fiberNode.alternate.props : {},
+            )
+            break
           default:
             break
         }
@@ -123,6 +205,12 @@ function commitRoot() {
     }
   }
 
+  for (const deletion of deletions) {
+    if (deletion.dom) {
+      const parentFiber = findParentFiber(deletion)
+      parentFiber?.dom?.removeChild(deletion.dom)
+    }
+  }
   if (workInProgressRoot !== null) {
     commitWork(workInProgressRoot.child)
     currentRoot = workInProgressRoot
@@ -134,7 +222,6 @@ function commitRoot() {
 const workLoop: IdleRequestCallback = (deadline) => {
   while (nextUnitOfWork && deadline.timeRemaining() > 1)
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
-
   if (!nextUnitOfWork && workInProgressRoot)
     commitRoot()
 

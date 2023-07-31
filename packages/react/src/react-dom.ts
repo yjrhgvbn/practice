@@ -1,8 +1,13 @@
+import { createElement } from './createElement'
 import { createRootFiberNode } from './fiber'
 
 type ComponentChild = any
 export function render(vNode: ComponentChild, element: HTMLElement) {
-  createRootFiberNode(vNode, element)
+  if (typeof vNode === 'function')
+    createRootFiberNode(createElement(vNode), element)
+
+  else
+    createRootFiberNode(vNode, element)
 }
 
 export function renderDom(vNode: ComponentChild): Node | null {

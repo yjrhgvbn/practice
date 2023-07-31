@@ -14,7 +14,7 @@ export function createDOM(fiberNode: FiberNode): FiberNodeDOM {
 
   return dom
 }
-function updateAttributes(dom: NonNullable<FiberNodeDOM>,
+export function updateAttributes(dom: NonNullable<FiberNodeDOM>,
   nextProps: VirtualElementProps,
   prevProps: VirtualElementProps = {}) {
   for (const [removePropKey, removePropValue] of Object.entries(prevProps)) {
@@ -31,6 +31,8 @@ function updateAttributes(dom: NonNullable<FiberNodeDOM>,
   }
 
   for (const [attributeKey, attributeValue] of Object.entries(nextProps)) {
+    if (attributeKey.startsWith('__'))
+      continue
     if (attributeKey.startsWith('on')) {
       dom.addEventListener(
         attributeKey.slice(2).toLowerCase(),
